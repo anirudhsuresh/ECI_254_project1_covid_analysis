@@ -1,0 +1,131 @@
+---
+title: ' R- Code for Hypothesis 2'
+output: word_document
+---
+
+```{r,results='hide',message=FALSE}
+library(tidyverse)
+# reading in the trip data
+trip<-read_csv("data/Trips_by_Distance.csv")
+
+# Filtering national data only for 2020
+trip_nat<-trip%>%filter(Level=="National")
+library(lubridate)
+trip_date1 <- c(trip_nat$Date)
+trip_year<-year(as.POSIXlt(trip_date1, format="%Y-%m-%d"))
+
+
+trip_nat<-trip_nat%>%mutate(Year=trip_year)# merging the years with the trip data
+
+trip_nat<-trip_nat%>%filter(Year==2020)
+
+# Extracting months from the date
+
+library(lubridate)
+trip_date <- c(trip_nat$Date)
+trip_month<-month(as.POSIXlt(trip_date, format="%Y-%m-%d")) 
+
+# merging the months with the trip data
+trip_nat_month<-trip_nat%>%mutate(Month=trip_month)
+
+# summing up all the trips in a month
+trips_total<-trip_nat_month%>%group_by(Month)%>%summarise(Total_Trips=sum(`Number of Trips`)/10^9)# billion trips
+
+# plotting trips versus month
+
+library(ggplot2)
+library('ggeasy')
+ggplot(data = trips_total)+
+  geom_bar(mapping=aes(x=as.factor(Month),y=Total_Trips),stat="identity",fill="blue")+
+  ggtitle("National Trips monthwise in 2020")+
+  xlab("Months")+
+  ylab("Total Trips(billions)")+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+# COVID CASES
+
+covid<-read_csv("data/United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv")
+
+# # Filtering  data only for 2020
+library(lubridate)
+covid_date <- c(covid$submission_date)
+covid_year<-year(as.POSIXlt(covid_date, format="%m/%d/%Y")) 
+
+covid_2020<-covid%>%mutate(Year=covid_year)
+
+covid_2020<-covid_2020%>%filter(Year==2020)
+
+# Comparative analysis of Covid cases with trip data in 2020
+
+#1 Extracting state wise data
+trip_state<-trip%>%filter((Level=="County"))
+library(lubridate)
+trip_date2 <- c(trip_state$Date)
+trip_year1<-year(as.POSIXlt(trip_date2, format="%Y-%m-%d"))
+trip_state_year<-trip_state%>%mutate(Year=trip_year1)# merging the years with the trip data
+
+# filtering state trip data for 2020
+
+trip_state_2020<-trip_state_year%>%filter(Year==2020)
+trip_state_2020<-trip_state_2020[complete.cases(trip_state_2020),]
+
+# Grouping together state data for total trip and people staying inside 
+names(trip_state_2020)[4]<-"State"
+trip_state_2020_tt<-trip_state_2020%>%group_by(State)%>%summarise(Total_Trips=sum(`Number of Trips`))
+trip_state_2020_inhouse<-trip_state_2020%>%group_by(State)%>%summarise(Inhouse=sum(`Population Staying at Home`))
+
+## Finding cases state wise
+names(covid_2020)[2]<-"State"
+covid_2020_state<-covid_2020%>%group_by(State)%>%summarise(Total_cases=max(`tot_cases`))
+ 
+# Merging Trip  and cases data with population
+covid_trip_merged<-inner_join(covid_2020_state,trip_state_2020_tt,by="State")
+
+highcovid_trip_merged<-covid_trip_merged%>%arrange(desc(Total_cases))%>%slice(1:10) # top ten states with highest cases
+pop<-read_csv("data/population.csv")
+highcovid_trip_merged<-left_join(highcovid_trip_merged,pop,by="State")
+
+# obtaining the percapita covid cases as a percentage of total trips
+
+highcovid_trip_merged<-highcovid_trip_merged%>%mutate(Total_cases_pct=(Total_cases/Population))%>%mutate(Total_Trips_pct=((Total_Trips/sum(Total_Trips))*100))
+
+
+# Merging in house  and cases data with population
+covid_inhouse_merged<-inner_join(covid_2020_state,trip_state_2020_inhouse,by="State")
+highcovid_inhouse_merged<-covid_inhouse_merged%>%arrange(desc(Total_cases))%>%slice(1:10) # top ten states with highest cases
+
+# adding population data
+highcovid_inhouse_merged<-left_join(highcovid_inhouse_merged,pop,by="State")
+# obtaining the percapita covid cases as a percentage of total population residing inside home
+highcovid_inhouse_merged<-highcovid_inhouse_merged%>%mutate(Total_cases_pct=(Total_cases/Population))%>%mutate(Total_inhouse_pct=((Inhouse/sum(highcovid_inhouse_merged$Inhouse))*100))
+
+### Plot 1 : Trip% and per capita covid cases for top 10 states
+library(ggplot2)
+  ggplot(data = highcovid_trip_merged)+
+  geom_point(mapping=aes(x=State,y=Total_Trips_pct,size=Total_cases_pct),color="blue",show.legend=TRUE,alpha=0.5) +
+  scale_size(range = c(1,9), name="Covid cases per capita")+
+  ylab(" % Total Trips")+
+  xlab("State")+
+  ggtitle("Correlation between Covid cases and trips ")+
+  theme(legend.position = "bottom")+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5))
+  
+  ### Plot 2 : % People staying indoor and per capita covid cases for top 10 states
+  
+  
+  library(ggplot2)
+  
+  ggplot(data = highcovid_inhouse_merged)+
+    geom_point(mapping=aes(x=State,y=Total_inhouse_pct,size=Total_cases_pct),color="red",show.legend=TRUE,alpha=0.5) +
+    scale_size(range = c(1,9), name="Covid cases per capita")+
+    ylab(" % of population staying indoors")+
+    xlab("State")+
+    ggtitle("Correlation between Covid cases and people not travelling ")+
+    theme(legend.position = "bottom")+
+    theme_bw()+
+    theme(plot.title = element_text(hjust = 0.5))
+
+
