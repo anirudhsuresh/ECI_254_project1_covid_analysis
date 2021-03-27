@@ -1,0 +1,336 @@
+---
+title: "ECI 254 - Midterm"
+author: "Tareq & Anirudh "
+date: "2/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Demographic and Social Indices Anlysis for COVID-19 {.tabset}
+### Introduction and Data cleaning
+
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+# installing necessary packages 
+#install.packages('ggeasy')
+library(ggeasy)
+#install.packages('ggpmisc')
+library(ggpmisc)
+library(tidyverse)
+library(data.table)
+
+#data<-fread('Data/COVID-19_Case_Surveillance_Public_Use_Data.csv')
+data<-read_csv('data/COVID-19.CSV')
+#use the above
+
+
+
+# mydata<-data[data$cdc_case_earliest_dt>'2020-11-30',]
+
+mydata<-data
+
+# new data frome
+new_data<- mydata%>%
+  select(cdc_case_earliest_dt,sex, age_group, race_ethnicity_combined, medcond_yn, icu_yn,death_yn, hosp_yn)
+
+
+#----------------------------------------------------------------------------------------------------------
+
+# general cleaning of data
+new_data$medcond_yn[new_data$medcond_yn=='Missing']<-NA
+new_data$icu_yn[new_data$icu_yn=='Missing']<-NA
+new_data$death_yn[new_data$death_yn=='Missing']<-NA
+new_data$hosp_yn[new_data$hosp_yn=='Missing']<-NA
+new_data$age_group[new_data$age_group=='Missing']<-NA
+
+
+# defining a new data frame
+mydata1<-new_data
+
+
+```
+
+#### Data Sources/ Gathering and Data Cleaning 
+
+<span style="color:blue">*COVID-19 Case Surveillance Public Use Dataset*</span>
+
+This dataset is managed by the Centers for Disease Control and Prevention (CDC), and it includes individual-level information reported to the different U.S. states and autonomous reporting agencies. Besides, this dataset is overseen by the Case Surveillance Task Force and Surveillance Review Response Group (SRRG) to ensure individual confidentiality. Also, different data cleaning/quality assurance procedures have been implemented on such data. Some of those tools include reclassifying unanswered questions as needed and applicable and performing logical checks to address data errors. Furthermore, this public use dataset has 18,379,871 observations with 11 variables, including information about demographic characteristics, exposure history to the virus, clinical and laboratory data, diagnostic test results, hospital/intensive care unit admissions, and death status.
+
+$~$
+
+<span style="color:blue">*Data cleaning*</span>
+
+The main version of the COVID-19 public use data provided by CDC contained more than 18 million rows of observations with 12 variables. After careful inspection of all variables within the dataset, the authors decided to filter the data based on the most critical variables needed for analysis. Thus, only eight variables were considered for inclusion in our data analysis. 
+
+
+### Exploratory Data analysis
+
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+# time series for all covid cases from jan 2020 till jan 2021 ####
+
+# series by day
+
+# grouping and finding the count 
+d_covid<-mydata1%>%filter(!is.na(hosp_yn))%>%filter(!is.na(icu_yn))%>% filter(!is.na(death_yn))%>%
+  group_by(cdc_case_earliest_dt)%>%summarize(count=n())
+
+#time_covid<- d_covid%>%left_join(holiday, by= 'cdc_case_earliest_dt')
+ylab<-c(5,10,15,20,25,30)
+#plot
+d_covid%>% ggplot(aes(x=cdc_case_earliest_dt,y=count))+geom_line(color='red')+labs(title = 'Variation of COVID-19 cases In the US over time', x='Month', y='Number of Cases')+
+  geom_smooth(method = 'lm', se=FALSE, linetype='dashed', color='blue')+theme_bw()+scale_y_continuous(labels = paste0(ylab, "K"),
+                                                                                                      breaks = 10^3 * ylab )+
+  ggeasy::easy_center_title()
+```
+
+The above figure illustrates the per-day COVID cases from January 2020 to January 2021. Three peaks/waves of COVID-19 cases can be observed, though the second wave is far subdued than the other two. The most recent wave had the most number of cases compared to others. This variation in the intensity of the 3 waves can be explained by the fact that during the initial days of the virus there was limited information regarding the spread and potency, but later on with mask mandates and stay at home orders the spread could be controlled for a certain time period. But again, the case-counts started rising around the summer. Most peaks can be noticed after a public holiday, and profound peaks can be observed after the Christmas and New Year breaks. However, this theory does not hold good for all public holidays.
+
+$~$
+
+Apart from the case counts we  analyzed the underlying social demographic trends relating to the spread of COVID-19 among different age groups, races and gender. The next figure illustrates  the case counts among different age groups, and their respective percentage contributions.
+
+
+$~$
+
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+# cases for differnet age groups
+age_df<-mydata1%>%filter(!is.na(age_group)) %>%group_by(age_group)%>%summarize(count=n())%>% mutate(percentage=prop.table(count))
+age_df%>% ggplot(aes(age_group,count,label = scales::percent(percentage)))+geom_bar(stat="identity",fill='SteelBlue')+
+  labs(title = 'Variation of total COVID-19 cases In the US for Different Age Groups', x='Age Groups', y='Total Number of Cases')+
+  theme_bw()+
+  geom_text(position = position_dodge(width = .9),    # move to center of bars
+            vjust = -0.5,                             # nudge above top of bar
+            size = 3) + 
+  scale_y_continuous(labels = scales::percent_format(accuracy=1))+theme(axis.text.y = element_blank())+
+  ggeasy::easy_center_title()
+
+```
+$~$
+
+Against popular belief, this graph indicates that individuals in the age group between 20-29 had a 1 in 5 chance of being tested COVID-19 positive, which is the highest among all age groups. The oldest (80+ years) and the youngest (0-9 years) seem to have the lowest incidence of COVID-19 reported. This can be attributed to several factors like older people are more likely to stay home more, travel less, and are also advised to generally step out less often. Also, the 25-45 years age bracket would be part of the main group of essential workers, and hence they may have had more potential exposure to the virus.
+
+$~$
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+# all races analysis for covid cases ####
+race_df<-mydata1%>%filter(!is.na(race_ethnicity_combined)) %>%group_by(race_ethnicity_combined)%>%summarize(count=n())%>%
+  mutate(percentage=prop.table(count))%>% arrange(desc(percentage))
+x<-race_df$race_ethnicity_combined
+race_df$race_ethnicity_combined<-gsub("(.*),.*", "\\1", x)
+# removing missing and unknown
+# also removing '/'
+x<-race_df$race_ethnicity_combined
+race_df$race_ethnicity_combined<-gsub("(.*)/.*", "\\1", x)
+race_df<-as_tibble(race_df)
+# selecting only certain races
+race_df %>% filter(race_df$race_ethnicity_combined %in%c("American Indian","Asian","Black","Hispanic","Multiple","Native Hawaiian","White"))
+
+race_df<-race_df%>% filter(race_ethnicity_combined != c("Unknown"))
+race_df<-race_df %>% filter(race_ethnicity_combined != c("Missing"))
+
+race_df%>% ggplot(aes(reorder(race_ethnicity_combined, count),count,label = scales::percent(percentage)))+geom_bar(stat="identity",fill='#FF6666')+
+  labs(title = 'Variation of total COVID-19 cases In the US for Different Races', x='Races', y='Total Number of Cases')+
+  geom_text(position = position_dodge(width = .9),    # move to center of bars
+            vjust = -0.5,                             # nudge above top of bar
+            size = 3) + 
+  scale_y_continuous(labels = scales::percent)+theme(axis.text.y = element_blank())+
+  theme_bw()+ggeasy::easy_center_title()+theme(axis.text.y = element_blank())
+```
+$~$
+
+The above figure describes the variation of COVID-19 cases with ethnicity. While White people account for nearly30% of the total cases, the black and the Hispanic groups contribute to nearly half the cases in the United States.
+
+$~$
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+# removing the missing other and unknown sexes
+sex_cases<-mydata1 %>%filter(!is.na(hosp_yn))%>%filter(!is.na(sex))%>%filter(!is.na(age_group)) %>%group_by(sex)%>%summarize(count=n())%>%
+  mutate(percentage=prop.table(count))
+sex_cases
+sex_cases<-sex_cases%>%filter(sex %in% c('Female','Male'))
+# sex_cases<-sex_cases%>%filter(hosp_yn %in% c('No','Yes'))
+sex_cases%>% ggplot(aes(sex,count,fill=sex, label = scales::percent(percentage)
+))+geom_bar(stat="identity",position ='dodge')+
+  theme_classic(base_size = 18)+
+  xlab("Gender")+ 
+  ylab("Percentage")+ 
+  labs(fill="Gender",title='COVID-19 Cases Based on Gender')+
+  geom_text(position = position_dodge(width = .9),    
+                                        vjust = -0.5,                             
+                                        size = 3) + 
+  scale_y_continuous(labels = scales::percent)+theme(axis.text.y = element_blank())+ggeasy::easy_center_title()+theme(plot.title=element_text(size=15))
+
+```
+$~$
+
+From the above figure , we can interpret that the number of cases for women were slightly higher compared to men. 
+Apart from the social demographic indicators, the travel patterns of the individuals were also severely impacted during the pandemic. With stay at home orders and mask mandates being effective, there was a major reduction in the number of trip related activities. Figure 4 depicts the distribution of the total number of trips for the year 2020. The trip count includes all forms of travel ranging from personal, public transit and also recreational trips.
+
+
+### Hypothesis 1
+
+<span style="color:green">**White Race would lead COVID-19 counts for all months**</span>
+
+From the exploratory analysis it was clear that  White(s) dominated the number of COVID-19 cases by a ratio of about 1 in 3. The figure below shows a month wise breakdown of the cases for different ethnicities. 
+
+$~$
+
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+#race analysis for each month
+
+race_df<- mydata1 %>% filter(!is.na(race_ethnicity_combined)) %>% mutate(date_by_month= strftime(cdc_case_earliest_dt,'%m'))
+
+race_df1<- race_df%>%filter(!is.na(medcond_yn))%>%filter(!is.na(icu_yn))%>%filter(!is.na(death_yn))%>%filter(!is.na(hosp_yn))
+
+race_df_1<- race_df1 %>% group_by(race_ethnicity_combined, date_by_month)%>%summarize(count=n())%>%mutate(percentage=round(prop.table(count), 2))
+
+race_df_1
+
+x<-race_df_1$race_ethnicity_combined
+race_df_1$race_ethnicity_combined<-gsub("(.*),.*", "\\1", x)
+x<-race_df_1$race_ethnicity_combined
+race_df_1$race_ethnicity_combined<-gsub("(.*)/.*", "\\1", x)
+# removing missing and unknown
+race_df_1<-as_tibble(race_df_1)
+race_df_1 %>% filter(race_df_1$race_ethnicity_combined %in% 
+                     c("American Indian","Asian","Black","Hispanic","Multiple","White"))
+
+race_df_1<-race_df_1%>% filter(race_ethnicity_combined != c("Unknown"))
+race_df_1<-race_df_1 %>% filter(race_ethnicity_combined != c("Missing"))
+race_df_1<-race_df_1 %>% filter(race_ethnicity_combined != c("Native Hawaiian"))
+race_df_1<-race_df_1 %>% filter(race_ethnicity_combined != c("American Indian"))
+race_df_1<-race_df_1%>% filter(date_by_month!=c('01'))
+
+
+  
+ylab=c(10, 50, 100,150, 200)
+race_df_1%>% ggplot(aes(y=count,x= date_by_month,group=race_ethnicity_combined, color=race_ethnicity_combined, fill=race_ethnicity_combined))+
+  geom_line()+
+  labs(title = 'COVID-19 Cases Based on Different Races/Ethnicities in 2020 ',
+       x='Months', y='Total number of cases')+theme(legend.position = 'none')+
+  ggeasy::easy_center_title()+scale_y_continuous(labels = paste0(ylab, "K"),breaks = 10^3 * ylab )+theme_bw()+
+  ggeasy::easy_center_title()+scale_color_discrete(name='Race/Ethnicity')+theme(plot.title=element_text(size=10))
+  
+```
+
+$~$
+
+<span style="color:blue">*Results/Discussion*</span>
+
+The COVID Case Surveillance dataset had insufficient and error-prone values for February, causing the case counts for that month to be unusually low.
+From graph 7, we notice the white race dominating (pink color) most months. The Hispanic population does lead in May. Additionally, during the first few months, most races had a relatively similar number of cases, except Asian and mixed/multiple race groups. But after the month of July, the White race seem to dominate and have a large percentage of all the cases and continue to do so till for the rest of the year
+In conclusion, while our hypothesis isn't entirely false, it was not true  for every month. Further, it was noticed that all races seemed to have an almost similar share of cases in the beginning of the year while the trends for the later part of the year show that the White population was severely affected. In the future, we would like to factor in the ratio of the actual population being affected to the total population for each ethnic group 
+
+
+### Hypothesis 2
+
+<span style="color:green">**20-29 Age Group would lead COVID-19 counts for all months**</span>
+
+From the exploratory analysis it was clear that,  20-29 age group seems to dominate (1 in every 5 cases), so we expected this age group to have the highest number of COVID-19 cases for every month.
+
+
+$~$
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+#age analysis for each month
+age_df1<-mydata1%>%filter(!is.na(race_ethnicity_combined)) %>% filter(!is.na(age_group))%>%filter(!is.na(medcond_yn))%>%
+  filter(!is.na(icu_yn))%>%filter(!is.na(death_yn))%>%filter(!is.na(hosp_yn))
+  
+  
+  
+  
+age_df<-age_df1%>%mutate(date_by_month= strftime(cdc_case_earliest_dt,'%m'))%>% 
+  group_by(date_by_month,age_group)%>%
+  summarize(count=n())%>%mutate(percentage=prop.table(count))
+
+age_df<-age_df%>% filter(date_by_month!=c('01'))
+
+
+
+ylab=c(10,20,30,40,50,60,70,80,90,100)
+age_df%>% ggplot(aes(y=count,x= date_by_month,color=age_group, group=age_group))+
+  geom_line()+
+  labs(title = 'COVID-19 Cases for Diffferent Age Groups in 2020' ,
+       x='Months', y='Total number of COVID-19 Cases')+
+  theme(legend.position = 'none')+theme_bw()+
+  scale_color_discrete(name='Age Group')+
+  ggeasy::easy_center_title()+scale_y_continuous(labels = paste0(ylab, "K"),breaks = 10^3 * ylab )+
+  theme(plot.title=element_text(size=10))
+
+```
+
+$~$
+
+<span style='color:blue'>*Results/Discussion*</span>
+
+The above graph depicts the variation of COVID-19 cases for different age groups across the previous year, and the various age groups can be seen by different colored bars. Since we had seen that 20-29  age groups had the most share of cases in the United States, we expected them to dominate each month's case counts. But as we can see from the graph, this was not the case in March, April, and May. After June (06), the 20-29  age group seems to dominate till the end of the year. This means, almost half of the year, they were behind the case counts, but in the last half of the year, they had so many cases that they ended up with the highest percentage of cases for all age groups. Additionally, we can also see that the age groups (60+) initially had quite a number of cases which slowly reduced but again increased towards the later part of the year
+
+
+
+### Hypothesis 3
+
+<span style="color:green">**Women  have higher hospitalization and Intensive Care unit ( ICU )occupancy rates**</span>
+
+$~$
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+# hospital cases men vs women ####
+hos_cases<-mydata1 %>%filter(!is.na(hosp_yn))%>%filter(!is.na(sex)) %>%group_by(hosp_yn,sex)%>%summarize(count=n())%>%
+  mutate(percentage=prop.table(count))
+hos_cases
+# removing the missing other and unknown sexes
+hos_cases<-hos_cases%>%filter(sex %in% c('Female','Male'))
+hos_cases<-hos_cases%>%filter(hosp_yn %in% c('Yes'))
+hos_cases%>% ggplot(aes(sex,count,fill=hosp_yn, label = scales::percent(percentage)
+))+geom_bar(stat="identity",position ='dodge')+
+  theme_classic(base_size = 18)+
+  xlab("Gender")+ 
+  ylab("Percentage")+ 
+  labs(fill="Hospitilzation",title='COVID-19 Cases Based on Gender and Hospitalization Records', size=5)+
+  geom_text(position = position_dodge(width = .9),    
+                                        vjust = -0.5,                             
+                                        size = 3) + 
+  scale_y_continuous(labels = scales::percent)+theme(axis.text.y = element_blank())+ggeasy::easy_center_title()+theme(plot.title=element_text(size=10))
+
+
+```
+$~$
+
+<span style='color:blue'>*Results/Discussion*</span>
+
+The figure above depicts the percentage of hospitalization rate based on gender. It is clear that males have higher hospitalization rates than females which is interesting considering that they had a higher case count.
+
+$~$
+
+```{r eval=TRUE,echo=TRUE,message=FALSE,error=FALSE}
+#icu cases men women ####
+icu_cases<-mydata1 %>%filter(!is.na(hosp_yn))%>%filter(!is.na(sex)) %>%group_by(icu_yn,sex)%>%summarize(count=n())%>%
+  mutate(percentage=prop.table(count))
+# removing the missing other and unknown sexes
+icu_cases<-icu_cases%>%filter(sex %in% c('Female','Male'))
+icu_cases<-icu_cases%>%filter(icu_yn %in% c('Yes'))
+icu_cases%>% ggplot(aes(sex,count,fill=icu_yn,label = scales::percent(percentage)))+geom_bar(stat="identity",position ='dodge')+
+  theme_classic(base_size = 18)+
+  xlab("Gender")+ 
+  ylab("Percentage")+ 
+  labs(fill="ICU")+geom_text(position = position_dodge(width = .9),    
+                             vjust = -0.5,                             
+                             size = 3) + labs(title = 'COVID-19 Cases Based on Gender and ICU Records')+
+  scale_y_continuous(labels = scales::percent)+ggeasy::easy_center_title()+theme(axis.text.y = element_blank())+theme(plot.title=element_text(size=10))
+
+```
+
+$~$
+<span style='color:blue'>*Results/Discussion*</span>
+
+This graph describes ICU admissions (in percent) for males and females due to COVID-19. From the graph, we can decipher that the males here as well dominate the females, which therefore leads us to conclude that COVID-19 has been more detrimental or has more severe symptoms on men as compared to women. Therefore our hypothesis is not proven to be true in this case. Well, it will be interesting to know how does the ICU admissions correlate with the death count among the different genders
+
+
+### Conclusion 
+
+The present study modeled COVID related data. The major takeaways of this study are:
+
+1.   Analysis of COVID-19 cases among different races and ethnicities showed that Whites are severely affected by COVID-19, especially in the last four months of 2020. This is followed by Hispanics and Blacks.In the future a better way would be to account for the actual percentage of population of each ethnic groups against their case numbers for a better understanding.
+2.    Analyzing different age groups showed that  the 20-29 age group had the most share of cases in the United States for most months of the year barring March, April and May. Similarly for this analysis as well we would benefit from knowing the actual cases of each age group against their numbers as a range of all people in the US
+3.    Females tend to have more COVID-19 cases than men in general. But when looking into hospitalization records and intensive care units’ records, males have higher hospitalization and ICU admission rates. In the future we would analyze if males tend to be more to having underlying medical conditions, which in turn caused them to be far more susceptible to being hospitalized after catching the Coronavirus 
+
+
+
+
